@@ -1,7 +1,0 @@
-<resources>
-    <string name="app_name">JsonPlaceholderApp</string>
-    <string name="confirm">Подтвердить</string>
-    <string name="except">Введите число от 1 до 100</string>
-    <string name="insert">Введите id пользователя</string>
-    <string name="title_activity_second">SecondActivity</string>
-</resources>
