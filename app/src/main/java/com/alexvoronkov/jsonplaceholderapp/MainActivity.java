@@ -1,9 +1,16 @@
 package com.alexvoronkov.jsonplaceholderapp;
 
+import android.Manifest;
 import android.content.ContentResolver;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Handler;
 import android.provider.ContactsContract;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
@@ -15,6 +22,7 @@ import android.widget.Toast;
 import com.alexvoronkov.jsonplaceholderapp.Interface.RequestInterface;
 import com.alexvoronkov.jsonplaceholderapp.Models.Posts;
 import com.alexvoronkov.jsonplaceholderapp.Retrofit.RetrofitApi;
+import com.google.gson.internal.bind.TreeTypeAdapter;
 
 import java.util.ArrayList;
 
@@ -23,6 +31,8 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 public class MainActivity extends AppCompatActivity {
+
+    private final int REQUEST_PERMISSION_READ_CONTACTS = 1;
 
     private RecyclerView rv;
     private CardAdapter adapter;
@@ -98,42 +108,79 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void getContacts() {
+        if (!hasPermission(Manifest.permission.READ_CONTACTS)) {
+            return;
+        }
+        final Handler handler = new Handler();
+        Runnable task = new Runnable() {
+            @Override
+            public void run() {
+                String phoneNumber = null;
 
-        String phoneNumber = null;
+                Uri CONTENT_URI = ContactsContract.Contacts.CONTENT_URI;
+                String _ID = ContactsContract.Contacts._ID;
+                String DISPLAY_NAME = ContactsContract.Contacts.DISPLAY_NAME;
+                String HAS_PHONE_NUMBER = ContactsContract.Contacts.HAS_PHONE_NUMBER;
 
-        Uri CONTENT_URI = ContactsContract.Contacts.CONTENT_URI;
-        String _ID = ContactsContract.Contacts._ID;
-        String DISPLAY_NAME = ContactsContract.Contacts.DISPLAY_NAME;
-        String HAS_PHONE_NUMBER = ContactsContract.Contacts.HAS_PHONE_NUMBER;
+                Uri PhoneCONTENT_URI = ContactsContract.CommonDataKinds.Phone.CONTENT_URI;
+                String Phone_CONTACT_ID = ContactsContract.CommonDataKinds.Phone.CONTACT_ID;
+                String NUMBER = ContactsContract.CommonDataKinds.Phone.NUMBER;
 
-        Uri PhoneCONTENT_URI = ContactsContract.CommonDataKinds.Phone.CONTENT_URI;
-        String Phone_CONTACT_ID = ContactsContract.CommonDataKinds.Phone.CONTACT_ID;
-        String NUMBER = ContactsContract.CommonDataKinds.Phone.NUMBER;
+                final StringBuffer output = new StringBuffer();
+                ContentResolver contentResolver = getContentResolver();
+                Cursor cursor = contentResolver.query(CONTENT_URI, null,null, null, null);
 
-        StringBuffer output = new StringBuffer();
-        ContentResolver contentResolver = getContentResolver();
-        Cursor cursor = contentResolver.query(CONTENT_URI, null,null, null, null);
+                if (cursor.getCount() > 0) {
 
-        if (cursor.getCount() > 0) {
+                    while (cursor.moveToNext()) {
+                        String contact_id = cursor.getString(cursor.getColumnIndex( _ID ));
+                        String name = cursor.getString(cursor.getColumnIndex(DISPLAY_NAME));
+                        int hasPhoneNumber = Integer.parseInt(cursor.getString(cursor.getColumnIndex(HAS_PHONE_NUMBER)));
 
-            while (cursor.moveToNext()) {
-                String contact_id = cursor.getString(cursor.getColumnIndex( _ID ));
-                String name = cursor.getString(cursor.getColumnIndex(DISPLAY_NAME));
-                int hasPhoneNumber = Integer.parseInt(cursor.getString(cursor.getColumnIndex(HAS_PHONE_NUMBER)));
+                        if (hasPhoneNumber > 0) {
+                            output.append("\n Имя: " + name);
+                            Cursor phoneCursor = contentResolver.query(PhoneCONTENT_URI, null,
+                                    Phone_CONTACT_ID + " = ?", new String[] { contact_id }, null);
 
-                if (hasPhoneNumber > 0) {
-                    output.append("\n Имя: " + name);
-                    Cursor phoneCursor = contentResolver.query(PhoneCONTENT_URI, null,
-                            Phone_CONTACT_ID + " = ?", new String[] { contact_id }, null);
+                            while (phoneCursor.moveToNext()) {
+                                phoneNumber = phoneCursor.getString(phoneCursor.getColumnIndex(NUMBER));
+                                output.append("\n Телефон: " + phoneNumber);
+                            }
+                        } else {
+                            continue;
+                        }
 
-                    while (phoneCursor.moveToNext()) {
-                        phoneNumber = phoneCursor.getString(phoneCursor.getColumnIndex(NUMBER));
-                        output.append("\n Телефон: " + phoneNumber);
+                        output.append("\n");
                     }
+
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            contacts.setText(output);
+                        }
+                    });
                 }
-                output.append("\n");
             }
-            contacts.setText(output);
+        };
+
+        new Thread(task).start();
+    }
+
+    private boolean hasPermission(String permission) {
+        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[] {permission}, REQUEST_PERMISSION_READ_CONTACTS);
+            return false;
+        }
+
+        return true;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_PERMISSION_READ_CONTACTS &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            getContacts();
         }
     }
 }
